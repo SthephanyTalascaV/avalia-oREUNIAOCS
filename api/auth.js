@@ -1,7 +1,19 @@
 // api/auth.js — CS Auditor
+// Google OAuth via troca de código de autorização
+// Qualquer conta @nibo.com.br tem acesso
+
+const ADMIN_EMAILS = [
+    'simone.rangel@nibo.com.br',
+    'jonathan.dornelas@nibo.com.br',
+    'sthephany.talasca@nibo.com.br',
+];
+
 export default async function handler(req, res) {
     const { code, error } = req.query;
-    if (error) return res.redirect('/?auth_error=acesso_negado');
+
+    if (error) {
+        return res.redirect('/?auth_error=acesso_negado');
+    }
 
     if (!code) {
         const params = new URLSearchParams({
@@ -27,6 +39,7 @@ export default async function handler(req, res) {
                 grant_type:    'authorization_code'
             })
         });
+
         const tokens = await tokenRes.json();
         if (!tokens.access_token) throw new Error('Token inválido');
 
@@ -40,17 +53,23 @@ export default async function handler(req, res) {
             return res.redirect(`/?auth_error=dominio_invalido&email=${encodeURIComponent(user.email)}`);
         }
 
+        const role = ADMIN_EMAILS.includes(user.email.toLowerCase()) ? 'admin' : 'viewer';
+
         const session = Buffer.from(JSON.stringify({
             email:   user.email,
             name:    user.name,
             picture: user.picture,
+            role,
             exp:     Date.now() + 24 * 60 * 60 * 1000
         })).toString('base64');
 
+        // ✅ Cookie correto: nibo_cs_session (igual ao me.js)
         res.setHeader('Set-Cookie',
             `nibo_cs_session=${session}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=86400`
         );
+
         return res.redirect('/');
+
     } catch (err) {
         console.error('Auth error:', err);
         return res.redirect('/?auth_error=erro_interno');
